@@ -1,4 +1,14 @@
 
+# 0.2.0 (Migrating from mujinplanningclientpy)
+
+The `mujinplanningclient` package has been further split into:
+
+- `mujinzmqclient` (this repo) for purely ZMQ-related utilities, and
+- `mujinplanningclient` for the planning methods that use each of these.
+
+If you are writing your own ZMQ client, you may only need this repo.
+If you are writing something that makes requests to the planning system,
+you will need the `mujinplanningclient` repo.
 
 # 0.1.0 (Migrating from mujincontrollerclientpy)
 
