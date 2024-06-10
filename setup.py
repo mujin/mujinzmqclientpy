@@ -14,7 +14,7 @@ setup(
     name='mujinzmqclient',
     version=version['__version__'],
     packages=['mujinzmqclient'],
-    package_dir={'mujinplanningclient': 'python/mujinzmqclient'},
+    package_dir={'mujinzmqclient': 'python/mujinzmqclient'},
     license='Apache License, Version 2.0',
     long_description=open('README.md').read(),
     # flake8 compliance configuration
