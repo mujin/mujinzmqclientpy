@@ -370,7 +370,7 @@ class ZmqClient(object):
                 elif sendjson:
                     try:
                         self._socket.send_json(command, zmq.NOBLOCK)
-                    except OverflowError as e:
+                    except (OverflowError, TypeError) as e:
                         log.error('Failed sending command=%r: %s', command, e)
                         raise
                 else:
