@@ -293,15 +293,17 @@ class ZmqClient(object):
     def _CheckCallerThread(self, context=None):
         """Catch bad callers who use zmq client from multiple threads and cause random race conditions.
         """
-        callerthread = repr(threading.current_thread())
+        callerthread = threading.current_thread()
         oldcallerthread = self._callerthread
         oldcallercontext = self._callercontext
+        # Do not bother checking further if the last thread that called the client has already been joined. No danger of race condition in that case
+        if oldcallerthread is not None and oldcallerthread.is_alive():
+            # assert oldcallerthread == callerthread, 'zmqclient used from multiple threads: previously = %s, now = %s' % (oldcallerthread, callerthread)
+            if oldcallerthread.native_id() != callerthread.native_id():
+                log.error('zmqclient used from multiple threads, this is a bug in the caller: previously = %s, now = %s, previous context = %s, new context = %s', repr(oldcallerthread), repr(callerthread), repr(oldcallercontext)[:100], repr(context)[:100])
+
         self._callerthread = callerthread
         self._callercontext = context
-        if oldcallerthread is not None:
-            # assert oldcallerthread == callerthread, 'zmqclient used from multiple threads: previously = %s, now = %s' % (oldcallerthread, callerthread)
-            if oldcallerthread != callerthread:
-                log.error('zmqclient used from multiple threads, this is a bug in the caller: previously = %s, now = %s, previous context = %s, new context = %s', oldcallerthread, callerthread, repr(oldcallercontext)[:100], repr(context)[:100])
     
     def _AcquireSocket(self, timeout=None, checkpreempt=True):
         # If we were holding on to a socket before, release it before acquiring another one
