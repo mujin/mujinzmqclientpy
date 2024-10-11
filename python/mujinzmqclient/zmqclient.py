@@ -296,12 +296,11 @@ class ZmqClient(object):
         callerthread = threading.current_thread()
         if self._callerthreadref is not None:
             oldcallerthread = self._callerthreadref() # Get local ref for thread-safety.
-            oldcallercontext = self._callercontext
             # Do not bother checking further if the last thread that called the client has already been joined. No danger of race condition in that case
             if oldcallerthread is not None and oldcallerthread.is_alive():
                 # assert oldcallerthread == callerthread, 'zmqclient used from multiple threads: previously = %s, now = %s' % (oldcallerthread, callerthread)
                 if oldcallerthread.native_id != callerthread.native_id:
-                    log.error('zmqclient used from multiple threads, this is a bug in the caller: previously = %s, now = %s, previous context = %s, new context = %s', repr(oldcallerthread), repr(callerthread), repr(oldcallercontext)[:100], repr(context)[:100])
+                    log.error('zmqclient used from multiple threads, this is a bug in the caller: previously = %s, now = %s, previous context = %s, new context = %s', repr(oldcallerthread), repr(callerthread), repr(self._callercontext)[:100], repr(context)[:100])
 
         self._callerthreadref = weakref.ref(callerthread)
         self._callercontext = context
