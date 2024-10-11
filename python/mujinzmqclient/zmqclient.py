@@ -227,7 +227,7 @@ class ZmqClient(object):
     _pool = None
     _socket = None
     _isok = False
-    _callerthread = None  # Last caller thread
+    _callerthreadref = None  # Weak reference to last caller thread
     _callercontext = None  # The context of the last caller
 
     def __init__(self, hostname='', port=0, ctx=None, limit=100, url=None, checkpreemptfn=None, reusetimeout=10.0):
