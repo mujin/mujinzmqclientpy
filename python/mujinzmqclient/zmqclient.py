@@ -6,7 +6,7 @@ import six
 
 from . import zmq
 from . import TimeoutError, UserInterrupt, GetMonotonicTime
-
+import weakref
 import logging
 log = logging.getLogger(__name__)
 
@@ -227,7 +227,7 @@ class ZmqClient(object):
     _pool = None
     _socket = None
     _isok = False
-    _callerthread = None  # Last caller thread
+    _callerthreadref = None  # Weak reference to last caller thread
     _callercontext = None  # The context of the last caller
 
     def __init__(self, hostname='', port=0, ctx=None, limit=100, url=None, checkpreemptfn=None, reusetimeout=10.0):
@@ -293,15 +293,17 @@ class ZmqClient(object):
     def _CheckCallerThread(self, context=None):
         """Catch bad callers who use zmq client from multiple threads and cause random race conditions.
         """
-        callerthread = repr(threading.current_thread())
-        oldcallerthread = self._callerthread
-        oldcallercontext = self._callercontext
-        self._callerthread = callerthread
+        callerthread = threading.current_thread()
+        if self._callerthreadref is not None:
+            oldcallerthread = self._callerthreadref() # Get local ref for thread-safety.
+            # Do not bother checking further if the last thread that called the client has already been joined. No danger of race condition in that case
+            if oldcallerthread is not None and oldcallerthread.is_alive():
+                # assert oldcallerthread == callerthread, 'zmqclient used from multiple threads: previously = %s, now = %s' % (oldcallerthread, callerthread)
+                if oldcallerthread.native_id != callerthread.native_id:
+                    log.error('zmqclient used from multiple threads, this is a bug in the caller: previously = %s, now = %s, previous context = %s, new context = %s', repr(oldcallerthread), repr(callerthread), repr(self._callercontext)[:100], repr(context)[:100])
+
+        self._callerthreadref = weakref.ref(callerthread)
         self._callercontext = context
-        if oldcallerthread is not None:
-            # assert oldcallerthread == callerthread, 'zmqclient used from multiple threads: previously = %s, now = %s' % (oldcallerthread, callerthread)
-            if oldcallerthread != callerthread:
-                log.error('zmqclient used from multiple threads, this is a bug in the caller: previously = %s, now = %s, previous context = %s, new context = %s', oldcallerthread, callerthread, repr(oldcallercontext)[:100], repr(context)[:100])
     
     def _AcquireSocket(self, timeout=None, checkpreempt=True):
         # If we were holding on to a socket before, release it before acquiring another one
