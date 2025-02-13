@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.8 (2025-02-13)
+
+- Fix race condition: use threadInterval by copy as it can be modified any moment.
+
 ## 0.3.7 (2024-06-02)
 
 - Allow finishStatus/finishMessage to be specified for task StopX commands.
