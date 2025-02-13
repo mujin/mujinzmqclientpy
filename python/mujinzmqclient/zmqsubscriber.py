@@ -310,7 +310,7 @@ class ZmqThreadedSubscriber(ZmqSubscriber):
                 except Exception as e:
                     log.exception('exception caught in subscriber thread "%s": %s', self._threadName, e)
                 # rate limit the loop if desired
-                # Make a copy and use it because self._threadInterval is not protected by any mutex and can be modified any moment.
+                # Use a copy because self._threadInterval can be set to None in SetThreadInterval() at any moment.
                 threadInterval = self._threadInterval
                 if threadInterval is None:
                     continue
