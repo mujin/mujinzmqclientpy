@@ -315,6 +315,9 @@ class ZmqClient(object):
             self._pool.ReleaseSocket(self._socket)
             self._socket = None
     
+    def ReleaseWaitingSocket(self):
+        self._ReleaseSocket()
+    
     def SetPreemptFn(self, checkpreemptfn):
         self._checkpreemptfn = checkpreemptfn
     
