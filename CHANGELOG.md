@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.9 (2025-07-24)
+
+- Made the `_ReleaseSocket` function into public function `ReleaseSocket` so that user can call it.
+
 ## 0.3.8 (2025-02-13)
 
 - Fix race condition: use threadInterval by copy as it can be modified any moment.
