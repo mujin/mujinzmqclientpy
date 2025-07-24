@@ -260,7 +260,7 @@ class ZmqClient(object):
         self.SetDestroy()
 
         if self._pool is not None:
-            self._ReleaseSocket()
+            self.ReleaseSocket()
             self._pool.Destroy()
             self._pool = None
 
@@ -307,14 +307,14 @@ class ZmqClient(object):
     
     def _AcquireSocket(self, timeout=None, checkpreempt=True):
         # If we were holding on to a socket before, release it before acquiring another one
-        self._ReleaseSocket()
+        self.ReleaseSocket()
         self._socket = self._pool.AcquireSocket(timeout=timeout, checkpreemptfn=self._checkpreemptfn if checkpreempt else None)
 
-    def _ReleaseSocket(self):
+    def ReleaseSocket(self):
         if self._socket is not None:
             self._pool.ReleaseSocket(self._socket)
             self._socket = None
-    
+
     def SetPreemptFn(self, checkpreemptfn):
         self._checkpreemptfn = checkpreemptfn
     
@@ -396,7 +396,7 @@ class ZmqClient(object):
         finally:
             # release socket
             if releasesocket:
-                self._ReleaseSocket()
+                self.ReleaseSocket()
 
         raise UserInterrupt(u'Interrupted while waiting to send, ZMQ client is stopping')
 
@@ -450,6 +450,6 @@ class ZmqClient(object):
         finally:
             if releaseSocket:
                 # Release socket
-                self._ReleaseSocket()
+                self.ReleaseSocket()
         
         raise UserInterrupt(u'Interrupted while waiting for response, ZMQ client is stopping')
