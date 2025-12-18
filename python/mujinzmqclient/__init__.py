@@ -41,6 +41,8 @@ except ImportError:
 
 _ = ugettext
 
+class InternalError(ClientExceptionBase):
+    pass
 
 class TimeoutError(ClientExceptionBase):
     pass

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.10 (2025-12-18)
+
+- Handle poller returning a file descriptor.
+
 ## 0.3.9 (2025-07-24)
 
 - Made the `_ReleaseSocket` function into public function `ReleaseSocket` so that user can call it.
