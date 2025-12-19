@@ -5,7 +5,7 @@ import threading
 import six
 
 from . import zmq
-from . import TimeoutError, UserInterrupt, GetMonotonicTime
+from . import TimeoutError, UserInterrupt, InternalError, GetMonotonicTime
 import weakref
 import logging
 log = logging.getLogger(__name__)
@@ -130,6 +130,14 @@ class ZmqSocketPool(object):
         self._poller.unregister(socket)
         del self._pollingsockets[socket]
 
+    def _GetSocketFromFileDescriptor(self, fileDescriptor):
+        """Convert file descriptor (int) to socket object
+        """
+        for socket in self._pollingsockets.keys():
+            if socket.getsockopt(zmq.FD) == fileDescriptor:
+                return socket
+        raise InternalError(u'Poller returned a non-existing file descriptor %s' % fileDescriptor)
+
     def _Poll(self, timeout=0):
         """Spin once and does internal polling of sockets
         """
@@ -142,6 +150,8 @@ class ZmqSocketPool(object):
 
                 # At least one message can be received without blocking
                 try:
+                    if isinstance(socket, int):
+                        socket = self._GetSocketFromFileDescriptor(socket)
                     socket.recv(zmq.NOBLOCK)
                 except Exception as e:
                     # When an error occurs, throw the socket away
@@ -157,7 +167,8 @@ class ZmqSocketPool(object):
         for socket, event in self._poller.poll(timeout):
             if (event & zmq.POLLOUT) == zmq.POLLOUT:
                 # log.debug('a socket is ready for send, url = %s, polling = %d, available = %d', self._url, len(self._pollingsockets), len(self._availablesockets))
-
+                if isinstance(socket, int):
+                    socket = self._GetSocketFromFileDescriptor(socket)
                 # At least one message can be sent to socket without blocking
                 self._StopPollingSocket(socket)
                 self._availablesockets.append(socket)
