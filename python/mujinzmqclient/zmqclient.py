@@ -2,6 +2,7 @@
 # Copyright (C) 2012-2015 MUJIN Inc
 from typing import Any
 
+import ujson
 import msgspec
 import numpy
 import six
@@ -271,6 +272,8 @@ class ZmqClient(object):
 
     @staticmethod
     def _JsonEncodeHook(obj: Any) -> Any:
+        # Fast path for the numpy types we encode most frequently: convert them to native python objects that msgspec then re-encodes directly.
+        # This keeps the common case off the slower generic fallback below.
         if isinstance(
             obj,
             (numpy.int_, numpy.intc, numpy.intp, numpy.int8, numpy.int16, numpy.int32, numpy.int64,
@@ -281,7 +284,10 @@ class ZmqClient(object):
             return float(obj)
         if isinstance(obj, numpy.ndarray):
             return obj.tolist()
-        raise NotImplementedError(f"Cannot encode object of type {type(obj)}")
+
+        # For other types, fall back to the ujson behaviour (inferring serialization based on members).
+        # Splice the encoded output via msgspec.Raw to avoid reprocessing the serialized result.
+        return msgspec.Raw(ujson.dumps(obj).encode('utf-8'))
 
     def __del__(self):
         self.Destroy()
