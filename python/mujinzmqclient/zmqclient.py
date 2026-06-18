@@ -4,7 +4,6 @@ from typing import Any
 
 import ujson
 import msgspec
-import numpy
 import six
 import threading
 
@@ -272,19 +271,6 @@ class ZmqClient(object):
 
     @staticmethod
     def _JsonEncodeHook(obj: Any) -> Any:
-        # Fast path for the numpy types we encode most frequently: convert them to native python objects that msgspec then re-encodes directly.
-        # This keeps the common case off the slower generic fallback below.
-        if isinstance(
-            obj,
-            (numpy.int_, numpy.intc, numpy.intp, numpy.int8, numpy.int16, numpy.int32, numpy.int64,
-            numpy.uint8, numpy.uint16, numpy.uint32, numpy.uint64),
-        ):
-            return int(obj)
-        elif isinstance(obj, (numpy.float16, numpy.float32, numpy.float64)):
-            return float(obj)
-        if isinstance(obj, numpy.ndarray):
-            return obj.tolist()
-
         # For other types, fall back to the ujson behaviour (inferring serialization based on members).
         # Splice the encoded output via msgspec.Raw to avoid reprocessing the serialized result.
         return msgspec.Raw(ujson.dumps(obj).encode('utf-8'))
