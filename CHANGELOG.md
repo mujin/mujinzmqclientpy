@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.11 (2026-06-19)
+
+- Replace native json package with msgspec for decoding
+
 ## 0.3.10 (2025-12-18)
 
 - Handle poller returning a file descriptor.

@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2012-2015 MUJIN Inc
+from typing import Any
 
-import threading
+import ujson
+import msgspec
 import six
+import threading
 
 from . import zmq
 from . import TimeoutError, UserInterrupt, InternalError, GetMonotonicTime
@@ -263,6 +266,14 @@ class ZmqClient(object):
         self._socket = None
         self._isok = True
         self._checkpreemptfn = checkpreemptfn
+        self._jsonEncoder = msgspec.json.Encoder(enc_hook=self._JsonEncodeHook)
+        self._jsonDecoder = msgspec.json.Decoder()
+
+    @staticmethod
+    def _JsonEncodeHook(obj: Any) -> Any:
+        # For other types, fall back to the ujson behaviour (inferring serialization based on members).
+        # Splice the encoded output via msgspec.Raw to avoid reprocessing the serialized result.
+        return msgspec.Raw(ujson.dumps(obj).encode('utf-8'))
 
     def __del__(self):
         self.Destroy()
@@ -300,7 +311,7 @@ class ZmqClient(object):
     @property
     def port(self):
         return self._port
-    
+
     def _CheckCallerThread(self, context=None):
         """Catch bad callers who use zmq client from multiple threads and cause random race conditions.
         """
@@ -315,7 +326,7 @@ class ZmqClient(object):
 
         self._callerthreadref = weakref.ref(callerthread)
         self._callercontext = context
-    
+
     def _AcquireSocket(self, timeout=None, checkpreempt=True):
         # If we were holding on to a socket before, release it before acquiring another one
         self.ReleaseSocket()
@@ -328,7 +339,7 @@ class ZmqClient(object):
 
     def SetPreemptFn(self, checkpreemptfn):
         self._checkpreemptfn = checkpreemptfn
-    
+
     def SendCommand(self, command, timeout=10.0, blockwait=True, fireandforget=False, sendjson=True, recvjson=True, sendmultipart=False, recvmultipart=False, checkpreempt=None):
         """Sends command via established zmq socket
 
@@ -347,7 +358,7 @@ class ZmqClient(object):
         # log.debug('Sending command via ZMQ: %s', command)
         if checkpreempt is None:
             log.warn(u'Need to specify checkpreempt to zmq client for command %r', command)
-        
+
         self._CheckCallerThread(command)
 
         if fireandforget:
@@ -382,7 +393,8 @@ class ZmqClient(object):
                     self._socket.send_multipart(command, zmq.NOBLOCK)
                 elif sendjson:
                     try:
-                        self._socket.send_json(command, zmq.NOBLOCK)
+                        commandBytes = self._jsonEncoder.encode(command)
+                        self._socket.send(commandBytes, zmq.NOBLOCK)
                     except OverflowError as e:
                         log.error('Failed sending command=%r: %s', command, e)
                         raise
@@ -424,7 +436,7 @@ class ZmqClient(object):
         :return: Returns the recv or recv_json or recv_multipart response
         """
         self._CheckCallerThread('ReceiveCommand')
-        
+
         # Should have called SendCommand with blockwait=False first
         assert (self._socket is not None)
         releaseSocket = False
@@ -445,22 +457,23 @@ class ZmqClient(object):
                         return self._socket.recv_multipart(zmq.NOBLOCK)
                     elif recvjson:
                         releaseSocket = True
-                        return self._socket.recv_json(zmq.NOBLOCK)
+                        recvMsg = self._socket.recv(zmq.NOBLOCK)
+                        return self._jsonDecoder.decode(recvMsg) if recvMsg else None
                     else:
                         releaseSocket = True
                         return self._socket.recv(zmq.NOBLOCK)
-                
+
                 # Do timeout checking at the end
                 elapsedtime = GetMonotonicTime() - starttime
                 if timeout is not None and elapsedtime > timeout:
                     raise TimeoutError(u'Timed out to get response from %s after %f seconds (timeout=%f)' % (self._url, elapsedtime, timeout))
-                
+
                 if checkpreempt and self._checkpreemptfn is not None:
                     self._checkpreemptfn()
-        
+
         finally:
             if releaseSocket:
                 # Release socket
                 self.ReleaseSocket()
-        
+
         raise UserInterrupt(u'Interrupted while waiting for response, ZMQ client is stopping')
