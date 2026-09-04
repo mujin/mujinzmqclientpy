@@ -107,10 +107,11 @@ class ZmqSocketPool(object):
         socket.setsockopt(zmq.TCP_KEEPALIVE_IDLE, 2)  # The interval between the last data packet sent (simple ACKs are not considered data) and the first keepalive probe; after the connection is marked to need keepalive, this counter is not used any further
         socket.setsockopt(zmq.TCP_KEEPALIVE_INTVL, 2)  # The interval between subsequential keepalive probes, regardless of what the connection has exchanged in the meantime
         socket.setsockopt(zmq.TCP_KEEPALIVE_CNT, 2)  # The number of unacknowledged probes to send before considering the connection dead and notifying the application layer
-        self._monitorsockets[socket] = socket.get_monitor_socket(zmq.EVENT_DISCONNECTED)  # has to be set up before connect
+        monitorsocket = socket.get_monitor_socket(zmq.EVENT_DISCONNECTED)  # has to be set up before connect to catch every disconnect
         socket.connect(self._url)
         assert (socket not in self._sockets)
         self._sockets[socket] = True
+        self._monitorsockets[socket] = monitorsocket
         self._opencount += 1
 
         # log.debug('opened a socket, url = %s opened = %d, closed = %d', self._url, self._opencount, self._closecount)
@@ -123,8 +124,7 @@ class ZmqSocketPool(object):
         monitorsocket = self._monitorsockets.pop(socket, None)
         if monitorsocket is not None:
             try:
-                socket.disable_monitor()
-                monitorsocket.close(linger=0)
+                monitorsocket.close(linger=0)  # closing the socket below is what stops the monitoring
             except Exception as e:
                 log.exception('Caught exception when closing monitor socket: %s', e)
         try:
@@ -395,11 +395,11 @@ class ZmqClient(object):
         if not self._isok:
             raise UserInterrupt(u'Interrupted after acquiring socket, ZMQ client is stopping')
 
-        # Forget the disconnects that happened before this request, only the ones after it can make the reply go missing
-        self._pool.HasPeerDisconnected(self._socket)
-
         releasesocket = True
         try:
+            # Forget the disconnects that happened before this request, only the ones after it can make the reply go missing
+            self._pool.HasPeerDisconnected(self._socket)
+
             # Send phase
             starttime = GetMonotonicTime()
             while self._isok:
