@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.12 (2026-09-04)
+
+- Raise `ConnectionLostError` instead of waiting forever when the server disconnects while a response is pending.
+
 ## 0.3.11 (2026-06-19)
 
 - Replace native json package with msgspec for decoding
