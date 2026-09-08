@@ -8,7 +8,7 @@ import six
 import threading
 
 from . import zmq
-from . import TimeoutError, UserInterrupt, InternalError, GetMonotonicTime
+from . import ConnectionLostError, TimeoutError, UserInterrupt, InternalError, GetMonotonicTime
 import weakref
 import logging
 log = logging.getLogger(__name__)
@@ -27,6 +27,7 @@ class ZmqSocketPool(object):
     _sockets = None  # All sockets alive, a dictionary mapping from socket to True
     _pollingsockets = None  # Sockets that are in the polling state, waiting for send or receive, a dictionary mapping from socket to timestamp when added to the poller
     _availablesockets = None  # List of sockets that are ready for use immediately
+    _monitorsockets = None  # ZMQ monitor socket of every socket alive, used to notice that the server went away, a dictionary mapping from socket to its monitor socket
 
     _acquirecount = 0  # Number of times a socket is acquired
     _releasecount = 0  # Number of times a socket is released
@@ -55,6 +56,7 @@ class ZmqSocketPool(object):
         self._sockets = {}
         self._pollingsockets = {}
         self._availablesockets = []
+        self._monitorsockets = {}
 
         self._acquirecount = 0
         self._releasecount = 0
@@ -105,9 +107,11 @@ class ZmqSocketPool(object):
         socket.setsockopt(zmq.TCP_KEEPALIVE_IDLE, 2)  # The interval between the last data packet sent (simple ACKs are not considered data) and the first keepalive probe; after the connection is marked to need keepalive, this counter is not used any further
         socket.setsockopt(zmq.TCP_KEEPALIVE_INTVL, 2)  # The interval between subsequential keepalive probes, regardless of what the connection has exchanged in the meantime
         socket.setsockopt(zmq.TCP_KEEPALIVE_CNT, 2)  # The number of unacknowledged probes to send before considering the connection dead and notifying the application layer
+        monitorsocket = socket.get_monitor_socket(zmq.EVENT_DISCONNECTED)  # has to be set up before connect to catch every disconnect
         socket.connect(self._url)
         assert (socket not in self._sockets)
         self._sockets[socket] = True
+        self._monitorsockets[socket] = monitorsocket
         self._opencount += 1
 
         # log.debug('opened a socket, url = %s opened = %d, closed = %d', self._url, self._opencount, self._closecount)
@@ -117,6 +121,12 @@ class ZmqSocketPool(object):
         assert (socket in self._sockets)
         self._closecount += 1
         del self._sockets[socket]
+        monitorsocket = self._monitorsockets.pop(socket, None)
+        if monitorsocket is not None:
+            try:
+                monitorsocket.close(linger=0)  # closing the socket below is what stops the monitoring
+            except Exception as e:
+                log.exception('Caught exception when closing monitor socket: %s', e)
         try:
             # Make sure we do not linger when closing socket
             socket.close(linger=0)
@@ -132,6 +142,20 @@ class ZmqSocketPool(object):
         assert (socket in self._pollingsockets)
         self._poller.unregister(socket)
         del self._pollingsockets[socket]
+
+    def HasPeerDisconnected(self, socket):
+        """Returns True if the peer disconnected from the socket since the last call for that socket.
+
+        The events are consumed, so call this once before sending a request to ignore the disconnects that happened before it.
+        """
+        monitorsocket = self._monitorsockets.get(socket)
+        if monitorsocket is None:
+            return False
+        disconnected = False
+        while monitorsocket.poll(0) != 0:
+            monitorsocket.recv_multipart(zmq.NOBLOCK)
+            disconnected = True
+        return disconnected
 
     def _GetSocketFromFileDescriptor(self, fileDescriptor):
         """Convert file descriptor (int) to socket object
@@ -332,9 +356,9 @@ class ZmqClient(object):
         self.ReleaseSocket()
         self._socket = self._pool.AcquireSocket(timeout=timeout, checkpreemptfn=self._checkpreemptfn if checkpreempt else None)
 
-    def ReleaseSocket(self):
+    def ReleaseSocket(self, reuse=True):
         if self._socket is not None:
-            self._pool.ReleaseSocket(self._socket)
+            self._pool.ReleaseSocket(self._socket, reuse=reuse)
             self._socket = None
 
     def SetPreemptFn(self, checkpreemptfn):
@@ -373,6 +397,9 @@ class ZmqClient(object):
 
         releasesocket = True
         try:
+            # Forget the disconnects that happened before this request, only the ones after it can make the reply go missing
+            self._pool.HasPeerDisconnected(self._socket)
+
             # Send phase
             starttime = GetMonotonicTime()
             while self._isok:
@@ -463,8 +490,17 @@ class ZmqClient(object):
                         releaseSocket = True
                         return self._socket.recv(zmq.NOBLOCK)
 
-                # Do timeout checking at the end
                 elapsedtime = GetMonotonicTime() - starttime
+
+                if self._pool.HasPeerDisconnected(self._socket):
+                    # The reply could have arrived just before the peer disconnected, so poll one last time
+                    if (self._socket.poll(50, zmq.POLLIN) & zmq.POLLIN) == zmq.POLLIN:
+                        continue
+                    # A REQ socket never gets the reply to a request that was sent before the peer went away, and it cannot send another request either, so throw it away
+                    self.ReleaseSocket(reuse=False)
+                    raise ConnectionLostError(u'Lost connection to %s while waiting for a response, the request has to be sent again' % self._url)
+
+                # Do timeout checking at the end
                 if timeout is not None and elapsedtime > timeout:
                     raise TimeoutError(u'Timed out to get response from %s after %f seconds (timeout=%f)' % (self._url, elapsedtime, timeout))
 

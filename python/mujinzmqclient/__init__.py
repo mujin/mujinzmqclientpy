@@ -47,6 +47,9 @@ class InternalError(ClientExceptionBase):
 class TimeoutError(ClientExceptionBase):
     pass
 
+class ConnectionLostError(ClientExceptionBase):
+    pass
+
 class UserInterrupt(ClientExceptionBase):
     pass
 
