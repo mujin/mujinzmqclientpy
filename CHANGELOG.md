@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.13 (2026-10-06)
+
+- Log a warning when handling a subscription message takes longer than `threadInterval + 0.5` seconds.
+
 ## 0.3.12 (2026-09-04)
 
 - Raise `ConnectionLostError` instead of waiting forever when the server disconnects while a response is pending.

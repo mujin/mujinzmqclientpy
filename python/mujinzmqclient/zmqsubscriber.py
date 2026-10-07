@@ -31,6 +31,7 @@ class ZmqSubscriber(object):
     _checkpreemptfn = None # function for checking for preemptions
     _conflate = True # whether to conflate received messages to avoid parsing stale message
     _subscribedTopics = None  # set of topics subscribed to
+    _slowCallbackMargin = 0.5 # seconds beyond the expected loop interval after which a slow message callback is logged
 
     def __init__(self, endpoint=None, getEndpointFn=None, callbackFn=None, timeout=4.0, ctx=None, checkpreemptfn=None, conflate=True, topics=None):
         """Subscribe to zmq endpoint.
@@ -93,6 +94,11 @@ class ZmqSubscriber(object):
         """
         if self._callbackFn:
             self._callbackFn(message=message, endpoint=endpoint, elapsedTime=elapsedTime)
+
+    def _GetSlowCallbackThreshold(self):
+        """Seconds after which handling a received message is logged as slow.
+        """
+        return self._slowCallbackMargin
 
     def _HandleTimeout(self, endpoint, elapsedTime):
         """Call the user callback when subscription timed out.
@@ -196,7 +202,12 @@ class ZmqSubscriber(object):
                 if message is not None:
                     if len(message) == 1:
                         message = message[0]  # backward compatibility
+                    callbackStartTime = GetMonotonicTime()
                     self._HandleReceivedMessage(message=message, endpoint=self._socketEndpoint, elapsedTime=now - self._lastReceivedTimestamp)
+                    callbackElapsedTime = GetMonotonicTime() - callbackStartTime
+                    slowCallbackThreshold = self._GetSlowCallbackThreshold()
+                    if callbackElapsedTime > slowCallbackThreshold:
+                        log.warning('handling message from subscription to "%s" took %.03f seconds, longer than %.03f seconds, subscriber is falling behind', self._socketEndpoint, callbackElapsedTime, slowCallbackThreshold)
                     self._lastReceivedTimestamp = now
                     return message
 
@@ -264,7 +275,12 @@ class ZmqThreadedSubscriber(ZmqSubscriber):
         """sets the thread interval of querying for data from the socket
         """
         self._threadInterval = threadInterval
-    
+
+    def _GetSlowCallbackThreshold(self):
+        # Use a copy because self._threadInterval can be set to None in SetThreadInterval() at any moment.
+        threadInterval = self._threadInterval
+        return (threadInterval or 0) + self._slowCallbackMargin
+
     def _StartSubscriberThread(self):
         self._StopSubscriberThread()
 
