@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0 (2026-11-17)
+
+- Add `ZmqDealerClient`, a DEALER-based client that can have any number of requests outstanding at once, with a thread-safe `Interrupt()` to wake the owning thread.
+
 ## 0.3.13 (2026-10-06)
 
 - Log a warning when handling a subscription message takes longer than `threadInterval + 0.5` seconds.
