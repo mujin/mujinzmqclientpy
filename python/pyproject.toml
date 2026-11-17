@@ -1,0 +1,70 @@
+[tool.ruff]
+line-length = 120
+
+exclude = [
+    "mujinzmqclient/__init__.py",
+    "mujinzmqclient/zmqclient.py",
+    "mujinzmqclient/zmqsubscriber.py",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle
+    "F",  # pyflakes
+    "I",  # isort
+    "A",  # flake8-builtins
+    "B",  # flake8-bugbear
+    "PT",  # flake8-pytest-style
+    "C4",  # flake8-comprehensions
+    "PIE",  # flake8-pie
+    "TC",  # flake8-type-checking
+    "ERA",  # eradicate (deletion of commented code)
+]
+
+ignore = []
+
+# Allow fix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.isort]
+force-single-line = true
+
+[tool.ruff.format]
+# All code should use double quotes for strings.
+# This handles apostrophes in English text, better matches the C style guide, and matches the PEP257 docstring format.
+quote-style = "double"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
+
+[tool.mypy]
+# List of files / folders that should be typechecked.
+# By default, this should just be the python root of the repo.
+files = [
+    "./"
+]
+exclude = [
+    "mujinzmqclient/__init__.py",
+    "mujinzmqclient/zmqclient.py",
+    "mujinzmqclient/zmqsubscriber.py",
+]
+
+# Missing types should not be allowed to propagate from includes
+ignore_missing_imports = false
+
+# Require types for all functions
+# When migrating large existing repositories, it may be impractical to go back and add type annotations for all functions.
+# It is left to the repo owner's judgement whether setting this to `false` is an appropriate tradeoff.
+
+disallow_untyped_defs = true
+
+# Ensure that comparisons operate on objects of the same type
+# This helps to catch errors such as comparing enums with their value, which will never succeed
+strict_equality = true
