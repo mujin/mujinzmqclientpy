@@ -68,3 +68,13 @@ disallow_untyped_defs = true
 # Ensure that comparisons operate on objects of the same type
 # This helps to catch errors such as comparing enums with their value, which will never succeed
 strict_equality = true
+
+# Excluded files are still analyzed when imported by checked files, so suppress their errors as well.
+# This also avoids requiring private optional dependencies to be installed in CI.
+[[tool.mypy.overrides]]
+module = [
+    "mujinzmqclient",
+    "mujinzmqclient.zmqclient",
+    "mujinzmqclient.zmqsubscriber",
+]
+ignore_errors = true
