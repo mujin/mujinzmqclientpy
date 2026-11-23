@@ -185,10 +185,13 @@ class ZmqDealerClient(object):
         timeoutMS = None if timeout is None else max(0, int(timeout * 1000))
         polledEvents = dict(self._poller.poll(timeoutMS))
 
-        # If we got interrupted by a local event, reset the pipe and flag the interrupt
+        # An interrupt takes priority over anything else in the same poll, and is reported immediately.
+        # Once drained, the pipe can no longer wake a later Receive(), so returning a response here would lose it.
+        # Any response or disconnect also seen in this poll stays readable for the next Receive().
         if self._interruptReadFileDescriptor in polledEvents:
             self._DrainInterruptPipe()
             self._isInterrupted = True
+            return None
 
         # It's possible that a single poll cycle receives both valid responses _and_ a disconnect.
         # If this happens, return the responses first so that the caller gets as much data as possible.
